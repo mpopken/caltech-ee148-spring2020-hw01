@@ -3,7 +3,7 @@ import numpy as np
 import json
 from PIL import Image
 
-def detect_red_light(I):
+def detect_red_light(I, fname):
     '''
     This function takes a numpy array <I> and returns a list <bounding_boxes>.
     The list <bounding_boxes> should have one element for each red light in the 
@@ -19,46 +19,68 @@ def detect_red_light(I):
     '''
     
     
-    bounding_boxes = [] # This should be a list of lists, each of length 4. See format example below. 
+    bb = [] # This should be a list of lists, each of length 4. See format example below. 
     
     '''
     BEGIN YOUR CODE
     '''
-    
-    '''
-    As an example, here's code that generates between 1 and 5 random boxes
-    of fixed size and returns the results in the proper format.
-    '''
-    
-    box_height = 8
-    box_width = 6
-    
-    num_boxes = np.random.randint(1,5) 
-    
-    for i in range(num_boxes):
-        (n_rows,n_cols,n_channels) = np.shape(I)
+
+    print(fname)
+
+    s = 3
+    kernel = np.ones(s) / s
+    for d in range(I.shape[2]):
+        I[:, :, d] = np.apply_along_axis(lambda x: np.convolve(x, kernel, mode='same'), 0, I[:, :, d])
+        I[:, :, d] = np.apply_along_axis(lambda x: np.convolve(x, kernel, mode='same'), 1, I[:, :, d])
+
+    i = 0
+    while i < I.shape[0]:
+        j = 0
+        while j < I.shape[1]:
+            if I[i][j][0] > 55 + max(I[i][j][1], I[i][j][2]):
+                tl_row = max(0, i - 3)
+                tl_col = max(0, j - 3)
+                br_row = min(i + 6, I.shape[0] - 1)
+                br_col = min(j + 3, I.shape[1] - 1)
+
+                bb.append([tl_row, tl_col, br_row, br_col])
         
-        tl_row = np.random.randint(n_rows - box_height)
-        tl_col = np.random.randint(n_cols - box_width)
-        br_row = tl_row + box_height
-        br_col = tl_col + box_width
-        
-        bounding_boxes.append([tl_row,tl_col,br_row,br_col]) 
+            j += 3
+        i += 3
+
+    # Merge boxes
+    done = False
+    while not done:
+        done = True
+        for i in range(len(bb) - 1):
+            for j in range(i + 1, len(bb)):
+                if ((bb[j][0] <= bb[i][0] and bb[i][0] <= bb[j][2]) or (bb[i][0] <= bb[j][0] and bb[j][0] <= bb[i][2])) and \
+                   ((bb[j][1] <= bb[i][1] and bb[i][1] <= bb[j][3]) or (bb[i][1] <= bb[j][1] and bb[j][1] <= bb[i][3])):
+
+                    new_box = [min(bb[i][0], bb[j][0]), min(bb[i][1], bb[j][1]), max(bb[i][2], bb[j][2]), max(bb[i][3], bb[j][3])]
+                    del bb[j], bb[i]
+
+                    bb.append(new_box)
+
+                    done = False
+                    break
+            if not done:
+                break
     
     '''
     END YOUR CODE
     '''
     
-    for i in range(len(bounding_boxes)):
-        assert len(bounding_boxes[i]) == 4
+    for i in range(len(bb)):
+        assert len(bb[i]) == 4
     
-    return bounding_boxes
+    return bb
 
 # set the path to the downloaded data: 
-data_path = '../data/RedLights2011_Medium'
+data_path = 'data/RedLights2011_Medium'
 
 # set a path for saving predictions: 
-preds_path = '../data/hw01_preds' 
+preds_path = 'data/hw01_preds' 
 os.makedirs(preds_path,exist_ok=True) # create directory if needed 
 
 # get sorted list of files: 
@@ -76,7 +98,7 @@ for i in range(len(file_names)):
     # convert to numpy array:
     I = np.asarray(I)
     
-    preds[file_names[i]] = detect_red_light(I)
+    preds[file_names[i]] = detect_red_light(I, file_names[i])
 
 # save preds (overwrites any previous predictions!)
 with open(os.path.join(preds_path,'preds.json'),'w') as f:
